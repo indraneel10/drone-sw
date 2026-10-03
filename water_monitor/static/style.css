@@ -1,3 +1,5 @@
 body{font-family:system-ui;background:#edf5f7;color:#153849;margin:0}main{max-width:960px;margin:auto;padding:40px 24px}h1{font-size:40px}#readings{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}article{background:white;padding:24px;border-radius:12px}article strong{display:block;font-size:32px}button{padding:12px 18px;background:#09697b;color:white;border:0;border-radius:6px;margin-right:10px}button:disabled{opacity:.4}li{padding:10px}footer{margin-top:30px;font-size:13px}a{color:#09697b}
 
 table{width:100%;border-collapse:collapse;background:white}th,td{text-align:left;padding:12px;border-bottom:1px solid #c3d9df}li button{margin-left:12px;padding:7px 12px}
+
+.trend-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.trend-grid article{padding:16px}.trend-grid svg{width:100%;height:auto}.trend-grid text{font-size:13px;fill:#4c6875}.gridline{stroke:#d8e5ea;stroke-width:1}.trend-line{fill:none;stroke:#09697b;stroke-width:2.5}.trend-dot{fill:#09697b}.trend-grid h4{margin:8px 0}#trends{margin-top:24px}@media(max-width:700px){.trend-grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:6px}}

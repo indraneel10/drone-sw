@@ -113,6 +113,21 @@ class Store:
                     'simulated': True, 'sample_count': count, 'first_sample': first,
                     'last_sample': last, 'profiles': profiles, 'metrics': metrics}
 
+    def series(self, session_id, limit=120):
+        if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 500:
+            raise ValueError('limit must be an integer between 1 and 500')
+        with self.lock:
+            if not self.db.execute('SELECT 1 FROM sessions WHERE id=?', (session_id,)).fetchone():
+                raise KeyError(session_id)
+            rows = self.db.execute('''SELECT timestamp,simulated,latitude,longitude,
+                temperature_c,ph,dissolved_oxygen_mg_l,turbidity_ntu,profile
+                FROM samples WHERE session_id=? ORDER BY id DESC LIMIT ?''',
+                (session_id, limit)).fetchall()
+            samples = [dict(zip(SAMPLE_FIELDS, row)) for row in reversed(rows)]
+            for sample in samples:
+                sample['simulated'] = bool(sample['simulated'])
+            return {'session_id': session_id, 'simulated': True, 'limit': limit, 'samples': samples}
+
     def close(self):
         with self.lock:
             self.db.close()

@@ -83,3 +83,27 @@ browser marks readings as potentially stale when health checks fail.
 Existing databases migrate automatically: original samples are assigned the
 `baseline` profile without deleting history. CSV exports now add a `profile`
 column at the end; downstream importers should match columns by header name.
+
+## WM-SIM-003 — Recorded trends and JSON export
+
+Choose **View survey** beside any recording to display its summary and four
+sensor trend charts. The selected survey refreshes automatically while recording.
+Charts show up to the most recent 120 samples in chronological order, with sample
+time on the horizontal axis and sensor units on the vertical axis. Each chart
+uses its own automatic vertical scale. Single samples appear as a point; empty
+surveys show an explicit message. Chart scales are not water-safety limits.
+
+Both **Download CSV** and **Download JSON** preserve the full recording, including
+simulation flags, UTC timestamps, and sensor profiles. JSON is suitable for
+subsequent analysis and carries a session ID and sample array. Full exports are
+built in memory; large recordings may require a later streaming implementation.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | `/api/series/{id}?limit=120` | Latest bounded sample window, oldest to newest |
+| GET | `/api/export/{id}?format=json` | Complete survey as JSON |
+| GET | `/api/export/{id}?format=csv` | Complete survey as CSV (default) |
+
+The series limit must be an integer from 1 to 500. Unknown surveys return 404;
+invalid or repeated query options return 400. Survey samples remain isolated
+from other recordings. Download responses set attachment filenames.
