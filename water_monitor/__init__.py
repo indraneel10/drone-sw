@@ -1,0 +1,1 @@
+"""Civilian environmental sensor demonstration."""
