@@ -57,3 +57,29 @@ durable start/stop sessions and CSV export; interrupted-session recovery; tests
 cover persistence, ranges, HTTP errors and independent sampling.
 
 Real sensors, calibration, camera imagery, and deployment remain future work.
+
+
+## WM-SIM-002 — Profiles and survey analysis
+
+```bash
+python -m water_monitor --profile turbid --interval 0.5
+python -m water_monitor --profile low-oxygen --database low-oxygen.sqlite3
+```
+
+Profiles: `baseline` (original readings), `turbid` (higher synthetic turbidity),
+and `low-oxygen` (lower synthetic dissolved oxygen). Profiles are demonstration
+scenarios, not calibrated models or water-safety classifications. The interval
+must be between 0.1 and 60 seconds. All samples record the selected profile.
+
+Click **View summary** beside a survey for sample count and minimum, mean, and
+maximum of each sensor. The summary is a snapshot; click again to refresh during
+recording. An empty survey displays blank statistics. JSON is available from
+`GET /api/summary/{id}`; unknown surveys return 404.
+
+`GET /api/health` returns sampling interval, profile, sample age and status.
+A stopped sampler or an overdue reading returns HTTP 503 (`degraded`). The
+browser marks readings as potentially stale when health checks fail.
+
+Existing databases migrate automatically: original samples are assigned the
+`baseline` profile without deleting history. CSV exports now add a `profile`
+column at the end; downstream importers should match columns by header name.

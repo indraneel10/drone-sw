@@ -3,30 +3,44 @@ import argparse
 import csv
 import io
 import json
+import math
 import threading
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from .model import Store, reading
+from .model import PROFILES, Store, reading
 
 STATIC = Path(__file__).parent / 'static'
 
 
 class Application:
-    def __init__(self, store):
+    def __init__(self, store, profile='baseline', interval=1.0):
+        if not math.isfinite(interval) or not 0.1 <= interval <= 60:
+            raise ValueError('Sample interval must be between 0.1 and 60 seconds')
         self.store = store
-        self.latest = reading(0)
+        self.profile = profile
+        self.interval = interval
+        self.latest = reading(0, profile)
         self.finished = threading.Event()
         self.worker = threading.Thread(target=self.sample, daemon=True)
 
     def sample(self):
         index = 0
         while not self.finished.is_set():
-            self.latest = reading(index)
-            self.store.append(self.latest)
+            value = reading(index, self.profile)
+            self.store.append(value)
+            self.latest = value
             index += 1
-            self.finished.wait(1)
+            self.finished.wait(self.interval)
+
+    def health(self):
+        age = max(0, (datetime.now(timezone.utc) - datetime.fromisoformat(self.latest['timestamp'])).total_seconds())
+        healthy = self.worker.is_alive() and age <= max(3, self.interval * 3)
+        return {'status': 'ok' if healthy else 'degraded', 'mode': 'simulation',
+                'profile': self.profile, 'sample_interval_seconds': self.interval,
+                'sample_age_seconds': round(age, 2)}
 
 
 def handler_for(app):
@@ -48,11 +62,19 @@ def handler_for(app):
                 filename, mime = {'/': ('index.html', 'text/html; charset=utf-8'), '/app.js': ('app.js', 'text/javascript'), '/style.css': ('style.css', 'text/css')}[path]
                 self.send(200, (STATIC / filename).read_text(), mime)
             elif path == '/api/health':
-                self.send(200, json.dumps({'status': 'ok', 'mode': 'simulation'}))
+                health = app.health()
+                self.send(200 if health['status'] == 'ok' else 503, json.dumps(health))
             elif path == '/api/telemetry':
                 self.send(200, json.dumps(app.latest))
             elif path == '/api/sessions':
                 self.send(200, json.dumps(app.store.sessions()))
+            elif path.startswith('/api/summary/'):
+                try:
+                    summary = app.store.summary(int(path.rsplit('/', 1)[1]))
+                except (ValueError, KeyError):
+                    self.send(404, '{"error":"Session not found"}')
+                    return
+                self.send(200, json.dumps(summary))
             elif path.startswith('/api/export/'):
                 try:
                     columns, rows = app.store.export(int(path.rsplit('/', 1)[1]))
@@ -88,9 +110,15 @@ def main():
     parser = argparse.ArgumentParser(description='Local civilian water-monitoring simulator')
     parser.add_argument('--port', type=int, default=8080)
     parser.add_argument('--database', default='water-monitor.sqlite3')
+    parser.add_argument('--profile', choices=PROFILES, default='baseline')
+    parser.add_argument('--interval', type=float, default=1.0, help='Sample interval in seconds (0.1–60)')
     args = parser.parse_args()
+    if not math.isfinite(args.interval) or not 0.1 <= args.interval <= 60:
+        parser.error('--interval must be between 0.1 and 60 seconds')
+    if not 1 <= args.port <= 65535:
+        parser.error('--port must be between 1 and 65535')
     store = Store(args.database)
-    app = Application(store)
+    app = Application(store, args.profile, args.interval)
     server = ThreadingHTTPServer(('127.0.0.1', args.port), handler_for(app))
     app.worker.start()
     print(f'Dashboard: http://127.0.0.1:{args.port} — SIMULATED DATA', flush=True)
