@@ -1,4 +1,11 @@
-# Civilian Water Monitor
+# Civilian Water Monitor 1.0
+
+[![Tests and security](https://github.com/indraneel10/drone-sw/actions/workflows/ci.yml/badge.svg)](https://github.com/indraneel10/drone-sw/actions/workflows/ci.yml)
+[![Dashboard acceptance](https://github.com/indraneel10/drone-sw/actions/workflows/browser.yml/badge.svg)](https://github.com/indraneel10/drone-sw/actions/workflows/browser.yml)
+[![CodeQL](https://github.com/indraneel10/drone-sw/actions/workflows/codeql.yml/badge.svg)](https://github.com/indraneel10/drone-sw/actions/workflows/codeql.yml)
+
+See the [completion and run guide](docs/RELEASE_GUIDE.md) for delivered scope,
+Windows setup, acceptance checks, troubleshooting and remaining work.
 
 Local environmental monitoring demo: synthetic sensor readings, browser dashboard,
 SQLite survey recordings, and CSV exports. No physical vessel or control integration.
@@ -150,5 +157,7 @@ python -m pip wheel . --no-deps --wheel-dir dist
 python tests/check_install.py dist
 ```
 
-This installation check verifies serving packaged assets; it does not constitute
-a browser visual-layout check. Browser layout remains to be verified separately.
+The installation check verifies serving packaged assets. The separate Dashboard
+acceptance workflow runs Chromium to check recording, trends, downloads, keyboard
+focus and mobile horizontal overflow. It retains screenshots for seven days.
+These automated checks do not certify all browser/device combinations.

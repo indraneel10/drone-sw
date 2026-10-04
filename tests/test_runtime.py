@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import unittest
+from contextlib import closing
 from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -24,7 +25,7 @@ class RuntimeTests(unittest.TestCase):
             store = Store(path)
             store.start()
             store.close()
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db:
                 self.assertIsNotNone(db.execute('SELECT ended FROM sessions').fetchone()[0])
 
     def test_database_error_marks_sampler_degraded(self):
@@ -93,7 +94,7 @@ class RuntimeTests(unittest.TestCase):
                 process.send_signal(signal.SIGTERM)
                 _, stderr = process.communicate(timeout=10)
                 self.assertEqual(process.returncode, 0, stderr)
-                with sqlite3.connect(path) as db:
+                with closing(sqlite3.connect(path)) as db:
                     self.assertIsNotNone(db.execute('SELECT ended FROM sessions').fetchone()[0])
                 with DatabaseLease(path):
                     pass
