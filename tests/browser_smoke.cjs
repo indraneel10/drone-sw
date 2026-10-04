@@ -85,8 +85,9 @@ async function main() {
       } else assert.match(text, /timestamp,simulated,latitude/);
     }
     await page.setViewportSize({width:390,height:844});
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'Mobile layout must not overflow horizontally');
     await page.screenshot({path:path.join(output, 'mobile.png'),fullPage:true});
+    const overflow = await page.evaluate(() => Array.from(document.querySelectorAll('main *')).filter(node => node.getBoundingClientRect().right > window.innerWidth + 1).map(node => ({tag:node.tagName,id:node.id,width:node.getBoundingClientRect().width,text:node.textContent.slice(0,60)})));
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, `Mobile layout must not overflow horizontally: ${JSON.stringify(overflow)}`);
     await page.reload();
     await page.locator('#sessions li').first().filter({hasText:'Saved'}).waitFor();
     assert.equal(errors.length, 0, errors.join('\n'));
