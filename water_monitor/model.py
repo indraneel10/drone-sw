@@ -130,4 +130,10 @@ class Store:
 
     def close(self):
         with self.lock:
-            self.db.close()
+            try:
+                if self.active is not None:
+                    self.db.execute('UPDATE sessions SET ended=? WHERE id=?', (self.now(), self.active))
+                    self.db.commit()
+                    self.active = None
+            finally:
+                self.db.close()
