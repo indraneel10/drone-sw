@@ -1,4 +1,4 @@
-# Water Monitor 1.0 — Completion and run guide
+# Water Monitor 1.1 — Completion and run guide
 
 ## Delivered scope
 
@@ -13,6 +13,7 @@ any vessel or sensor hardware.
 | Dashboard | Latest readings, fixed simulated station and connection/health status |
 | Survey recording | Start/stop, durable SQLite history and interrupted-session recovery |
 | Analysis | Per-survey count, minimum, mean, maximum and four recent trend charts |
+| Survey planning | Saved locations, offline coordinate overview, schedules, recording labels and synthetic comparisons |
 | Export | Complete JSON and CSV recordings with simulation flags and profiles |
 | Installation | Python wheel, bundled dashboard assets and `water-monitor` command |
 | Process lifecycle | Single CLI owner per database, shutdown finalization, concise startup errors |
@@ -98,3 +99,5 @@ separately.
   are separate projects with separate requirements and validation.
 
 The completion claim applies to the monitoring simulator described above.
+
+For the planning workflow, see [Survey planning](SURVEY_PLANNING.md).

@@ -19,10 +19,11 @@ for (const [key, label, unit] of fields) {
   card.append(element('h2', label), value, element('span', unit));
   document.querySelector('#readings').append(card);
 }
-async function request(path, method = 'GET') {
+async function request(path, method = 'GET', payload) {
   const response = await fetch(path, {
     method,
-    headers: method === 'POST' ? {'X-Monitor-Request': '1'} : {},
+    headers: method === 'POST' ? {'X-Monitor-Request': '1', ...(payload === undefined ? {} : {'Content-Type': 'application/json'})} : {},
+    body: payload === undefined ? undefined : JSON.stringify(payload),
     signal: AbortSignal.timeout(5000),
   });
   const data = await response.json();
@@ -34,6 +35,7 @@ async function sessions() {
   const active = items.some(item => item.ended === null);
   document.querySelector('#start').disabled = active;
   document.querySelector('#stop').disabled = !active;
+  document.querySelector('#record-label').disabled = active;
   const signature = JSON.stringify(items);
   // Keep existing buttons and keyboard focus while the session list is unchanged.
   if (signature === sessionSignature) return;
@@ -41,6 +43,7 @@ async function sessions() {
   const list = document.querySelector('#sessions'); list.replaceChildren();
   for (const item of items) {
     const row = element('li', `Survey ${item.id} · ${new Date(item.started).toLocaleString()} · ${item.ended ? 'Saved' : 'Recording'} `);
+    if (item.location_name) row.append(element('span', `Planning label: ${item.location_name}${item.plan_id ? ` (plan ${item.plan_id})` : ''} · `));
     for (const format of ['csv', 'json']) {
       const link = element('a', `Download ${format.toUpperCase()}`);
       link.href = `/api/export/${item.id}?format=${format}`;
@@ -58,17 +61,24 @@ async function sessions() {
 for (const action of ['start', 'stop']) {
   document.querySelector(`#${action}`).addEventListener('click', async () => {
     try {
-      const result = await request(`/api/sessions/${action}`, 'POST');
+      const payload = {};
+      if (action === 'start') {
+        const choice = document.querySelector('#record-label').value;
+        if (choice) {const [kind, id] = choice.split(':'); payload[kind === 'location' ? 'location_id' : 'plan_id'] = Number(id);}
+      }
+      const result = await request(`/api/sessions/${action}`, 'POST', payload);
       document.querySelector('#message').textContent = `Survey ${result.session_id}: ${action}`;
       selectedSurvey = result.session_id;
       await sessions();
       await updateSurvey();
+      if (typeof plannerRefresh === 'function') await plannerRefresh();
     } catch (error) { document.querySelector('#message').textContent = error.message; }
   });
 }
 function renderSummary(data) {
   const panel = document.querySelector('#summary'); panel.replaceChildren();
   panel.append(element('h3', `Survey ${data.session_id} · ${data.sample_count} samples · ${data.profiles.join(', ') || 'No samples yet'}`));
+  if (data.location_id) panel.append(element('p', `Planning label: location ${data.location_id}${data.plan_id ? `, plan ${data.plan_id}` : ''}. Synthetic sample coordinates remain fixed.`));
   const table = element('table');
   const header = element('tr');
   for (const text of ['Sensor', 'Minimum', 'Mean', 'Maximum']) header.append(element('th', text));

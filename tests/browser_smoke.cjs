@@ -44,6 +44,27 @@ async function main() {
     assert.match(await page.locator('#position').textContent(), /Fixed simulated station/);
     assert.equal(await page.getByRole('button', {name:'Stop recording',exact:true}).isDisabled(), true);
 
+    for (const [name,latitude,longitude] of [['Lake edge','22.6','88.4'],['Inlet','22.65','88.45']]) {
+      await page.getByLabel('Location name', {exact:true}).fill(name);
+      await page.getByLabel('Latitude (degrees)', {exact:true}).fill(latitude);
+      await page.getByLabel('Longitude (degrees)', {exact:true}).fill(longitude);
+      await page.getByRole('button', {name:'Save location',exact:true}).click();
+      await page.locator('#location-list li').filter({hasText:name}).waitFor();
+    }
+    assert.equal(await page.locator('#location-map svg circle').count(), 2);
+    await page.getByLabel('Sampling location', {exact:true}).selectOption({label:'Lake edge'});
+    await page.getByLabel('Observation time (your browser’s local time)', {exact:true}).fill('2030-01-01T12:00');
+    await page.getByLabel('Observation notes', {exact:true}).fill('Inspect water appearance');
+    await page.getByRole('button', {name:'Save observation plan',exact:true}).click();
+    await page.locator('#plan-list li').filter({hasText:'Lake edge'}).waitFor();
+    const plannedOption = await page.locator('#record-label option').evaluateAll(options => options.find(option => option.value.startsWith('plan:')).value);
+    await page.locator('#record-label').selectOption(plannedOption);
+    await page.getByLabel('Sampling location', {exact:true}).selectOption({label:'Inlet'});
+    await page.getByLabel('Observation time (your browser’s local time)', {exact:true}).fill('2030-01-02T12:00');
+    await page.getByRole('button', {name:'Save observation plan',exact:true}).click();
+    await page.locator('#plan-list li').filter({hasText:'Inlet'}).getByRole('button', {name:'Cancel plan',exact:true}).click();
+    await page.locator('#plan-list li').filter({hasText:'Inlet'}).filter({hasText:'cancelled'}).waitFor();
+
     // An empty recording needs an explicit message and blank summary statistics.
     const empty = await page.request.post(`${url}/api/sessions/start`, {headers:{'X-Monitor-Request':'1'}});
     assert.equal(empty.status(), 200);
@@ -59,6 +80,7 @@ async function main() {
     await page.getByRole('button', {name:'Start recording',exact:true}).click();
     const recordedId = (await (await starting).json()).session_id;
     await page.locator('#summary h3').filter({hasText:`Survey ${recordedId} ·`}).waitFor();
+    assert.match(await page.locator('#summary').textContent(), /Synthetic sample coordinates remain fixed/);
     await page.locator('#trends svg').first().waitFor();
     assert.equal(await page.locator('#trends svg').count(), 4);
     await page.waitForFunction(() => document.querySelector('#trends h3').textContent.includes('recorded samples'));
@@ -69,6 +91,7 @@ async function main() {
     await page.screenshot({path:path.join(output, 'desktop.png'),fullPage:true});
     await page.getByRole('button', {name:'Stop recording',exact:true}).click();
     await page.locator('#sessions li').first().filter({hasText:'Saved'}).waitFor();
+    await page.locator('#plan-list li').filter({hasText:'completed'}).waitFor();
     const sampleCount = Number((await page.locator('#summary h3').textContent()).match(/(\d+) samples/)[1]);
     assert.ok(sampleCount > 0);
 
@@ -82,6 +105,8 @@ async function main() {
       if (format === 'JSON') {
         const data = JSON.parse(text); assert.equal(data.simulated, true);
         assert.ok(data.samples.length > 0); assert.equal(data.samples[0].simulated, true);
+        assert.equal(data.planning.association_only, true);
+        assert.equal(data.planning.plan_id, Number(plannedOption.split(':')[1]));
       } else assert.match(text, /timestamp,simulated,latitude/);
     }
     await page.setViewportSize({width:390,height:844});
@@ -90,8 +115,17 @@ async function main() {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, `Mobile layout must not overflow horizontally: ${JSON.stringify(overflow)}`);
     await page.reload();
     await page.locator('#sessions li').first().filter({hasText:'Saved'}).waitFor();
+    await page.locator('#location-list li').filter({hasText:'Lake edge'}).waitFor();
+    await page.locator('#plan-list li').filter({hasText:'completed'}).waitFor();
+    const plannerDownloaded = page.waitForEvent('download');
+    await page.getByRole('link', {name:'Download planner JSON',exact:true}).click();
+    const plannerDownload = await plannerDownloaded;
+    const plannerFile = path.join(output,'observation-planner.json'); await plannerDownload.saveAs(plannerFile);
+    const exportedPlanner = JSON.parse(fs.readFileSync(plannerFile,'utf8'));
+    assert.equal(exportedPlanner.locations.length, 2);
+    assert.equal(exportedPlanner.plans[0].status, 'completed');
     assert.equal(errors.length, 0, errors.join('\n'));
-    console.log('PASS: telemetry, recording, four SVG trends, keyboard focus, JSON/CSV downloads, mobile layout, and survey history');
+    console.log('PASS: locations, coordinate plot, observation schedule, assigned recording, telemetry, trends, downloads, focus, mobile layout, and persistence');
   } catch (error) {
     fs.writeFileSync(path.join(output, 'server.log'), logs);
     throw error;

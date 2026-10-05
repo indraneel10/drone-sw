@@ -1,4 +1,4 @@
-# Civilian Water Monitor 1.0
+# Civilian Water Monitor 1.1
 
 [![Tests and security](https://github.com/indraneel10/drone-sw/actions/workflows/ci.yml/badge.svg)](https://github.com/indraneel10/drone-sw/actions/workflows/ci.yml)
 [![Dashboard acceptance](https://github.com/indraneel10/drone-sw/actions/workflows/browser.yml/badge.svg)](https://github.com/indraneel10/drone-sw/actions/workflows/browser.yml)
@@ -161,3 +161,15 @@ The installation check verifies serving packaged assets. The separate Dashboard
 acceptance workflow runs Chromium to check recording, trends, downloads, keyboard
 focus and mobile horizontal overflow. It retains screenshots for seven days.
 These automated checks do not certify all browser/device combinations.
+
+
+## Survey planning (1.1)
+
+Save named sampling locations and observation schedules, view them on an offline
+coordinate plot, and tag recordings with a location or plan. Plans track manual
+recording activity. Compare sample-weighted synthetic means by location label and
+export your planner as JSON. Scheduling does not start a recording automatically;
+planning labels do not change the simulated samples' fixed coordinates.
+
+See [Survey planning](docs/SURVEY_PLANNING.md) for the workflow, status meanings,
+validation, API, and remaining planner limitations.

@@ -21,7 +21,7 @@ def main():
         # Isolated mode and a separate working directory prevent source imports.
         assets = subprocess.run([python, '-I', '-c',
             "from importlib.resources import files; root=files('water_monitor')/'static'; "
-            "assert all((root/name).is_file() for name in ('index.html','app.js','style.css'))"],
+            "assert all((root/name).is_file() for name in ('index.html','app.js','planner.js','style.css'))"],
             cwd=directory, capture_output=True, text=True, timeout=10)
         if assets.returncode:
             raise RuntimeError(assets.stderr)
@@ -43,7 +43,7 @@ def main():
                     if process.poll() is not None or time.monotonic() > deadline:
                         raise RuntimeError('Installed app did not become healthy')
                     time.sleep(0.05)
-            for route, expected in [('/', 'SIMULATED DATA'), ('/app.js', 'renderTrends'), ('/style.css', 'trend-grid')]:
+            for route, expected in [('/', 'SIMULATED DATA'), ('/app.js', 'renderTrends'), ('/planner.js', 'locationOverview'), ('/style.css', 'trend-grid')]:
                 with urlopen(f'http://127.0.0.1:{port}{route}', timeout=2) as response:
                     assert expected in response.read().decode('utf-8')
             print('PASS: installed CLI, packaged dashboard assets, and healthy server outside checkout')

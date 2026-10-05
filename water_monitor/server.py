@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from .model import PROFILES, Store, reading
 from .runtime import DatabaseLease
+from .planning import InvalidInput
 
 STATIC = Path(__file__).parent / 'static'
 
@@ -77,8 +78,8 @@ def handler_for(app):
             url = urlsplit(self.path)
             path = url.path
             query = parse_qs(url.query, keep_blank_values=True)
-            if path in ('/', '/app.js', '/style.css'):
-                filename, mime = {'/': ('index.html', 'text/html; charset=utf-8'), '/app.js': ('app.js', 'text/javascript'), '/style.css': ('style.css', 'text/css')}[path]
+            if path in ('/', '/app.js', '/planner.js', '/style.css'):
+                filename, mime = {'/': ('index.html', 'text/html; charset=utf-8'), '/app.js': ('app.js', 'text/javascript'), '/planner.js': ('planner.js', 'text/javascript'), '/style.css': ('style.css', 'text/css')}[path]
                 self.send(200, (STATIC / filename).read_text(encoding='utf-8'), mime)
             elif path == '/api/health':
                 health = app.health()
@@ -87,6 +88,15 @@ def handler_for(app):
                 self.send(200, json.dumps(app.latest))
             elif path == '/api/sessions':
                 self.send(200, json.dumps(app.store.sessions()))
+            elif path == '/api/locations':
+                self.send(200, json.dumps(app.store.locations()))
+            elif path == '/api/plans':
+                self.send(200, json.dumps(app.store.plans()))
+            elif path == '/api/comparison':
+                self.send(200, json.dumps(app.store.comparison()))
+            elif path == '/api/planning/export':
+                self.send(200, json.dumps({'purpose': 'observation labels and schedules only',
+                    'locations': app.store.locations(), 'plans': app.store.plans()}), filename='observation-planner.json')
             elif path.startswith('/api/series/'):
                 try:
                     if len(path.split('/')) != 4:
@@ -125,7 +135,10 @@ def handler_for(app):
                     samples = [dict(zip(columns, row)) for row in rows]
                     for sample in samples:
                         sample['simulated'] = bool(sample['simulated'])
-                    self.send(200, json.dumps({'session_id': session_id, 'simulated': True, 'samples': samples}), filename=f'survey-{session_id}.json')
+                    summary = app.store.summary(session_id)
+                    self.send(200, json.dumps({'session_id': session_id, 'simulated': True,
+                        'planning': {'location_id': summary['location_id'], 'plan_id': summary['plan_id'], 'association_only': True},
+                        'samples': samples}), filename=f'survey-{session_id}.json')
                     return
                 output = io.StringIO(newline='')
                 writer = csv.writer(output)
@@ -141,20 +154,65 @@ def handler_for(app):
             if self.headers.get('X-Monitor-Request') != '1' or self.headers.get('Sec-Fetch-Site') not in (None, 'same-origin'):
                 self.send(403, '{"error":"Request rejected"}')
                 return
-            if self.path not in ('/api/sessions/start', '/api/sessions/stop'):
+            if self.path not in ('/api/sessions/start', '/api/sessions/stop', '/api/locations', '/api/plans', '/api/plans/cancel'):
                 self.send(404, '{"error":"Not found"}')
                 return
             if self.path.endswith('/start') and app.sampler_error:
                 self.send(503, json.dumps({'error': app.sampler_error}))
                 return
             try:
-                action = app.store.start if self.path.endswith('/start') else app.store.stop
-                self.send(200, json.dumps({'session_id': action()}))
+                payload = self.read_json()
+                options = {
+                    '/api/sessions/start': ({'location_id', 'plan_id'}, set()),
+                    '/api/sessions/stop': (set(), set()),
+                    '/api/locations': ({'name', 'latitude', 'longitude', 'notes'}, {'name', 'latitude', 'longitude'}),
+                    '/api/plans': ({'location_id', 'scheduled_for', 'notes'}, {'location_id', 'scheduled_for'}),
+                    '/api/plans/cancel': ({'plan_id'}, {'plan_id'}),
+                }
+                allowed, required = options[self.path]
+                if set(payload) - allowed or required - set(payload):
+                    raise InvalidInput('Missing required fields or unsupported fields supplied')
+                if self.path == '/api/locations':
+                    self.send(201, json.dumps({'location_id': app.store.create_location(**payload)}))
+                elif self.path == '/api/plans':
+                    self.send(201, json.dumps({'plan_id': app.store.create_plan(**payload)}))
+                elif self.path == '/api/plans/cancel':
+                    app.store.cancel_plan(**payload)
+                    self.send(200, json.dumps({'plan_id': payload['plan_id'], 'status': 'cancelled'}))
+                elif self.path.endswith('/start'):
+                    self.send(200, json.dumps({'session_id': app.store.start(**payload)}))
+                else:
+                    self.send(200, json.dumps({'session_id': app.store.stop()}))
+            except InvalidInput as error:
+                self.send(400, json.dumps({'error': str(error)}))
+            except KeyError as error:
+                self.send(404, json.dumps({'error': str(error.args[0])}))
             except ValueError as error:
                 self.send(409, json.dumps({'error': str(error)}))
             except sqlite3.Error:
                 logging.exception('Recording action failed')
                 self.send(503, '{"error":"Database operation failed; inspect the application log"}')
+
+        def read_json(self):
+            if self.headers.get('Transfer-Encoding'):
+                raise InvalidInput('Use a Content-Length JSON request')
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+            except ValueError as error:
+                raise InvalidInput('Invalid Content-Length') from error
+            if not 0 <= length <= 4096:
+                raise InvalidInput('Request body must be at most 4096 bytes')
+            if length == 0:
+                return {}
+            if self.headers.get('Content-Type', '').split(';')[0].strip().lower() != 'application/json':
+                raise InvalidInput('Use application/json')
+            try:
+                payload = json.loads(self.rfile.read(length).decode('utf-8'))
+            except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                raise InvalidInput('Invalid JSON') from error
+            if not isinstance(payload, dict):
+                raise InvalidInput('JSON body must be an object')
+            return payload
     return Handler
 
 
